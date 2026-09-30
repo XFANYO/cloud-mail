@@ -34,14 +34,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # version 必须显式指定：mail-vue/package.json 无 packageManager 字段时，
+      # pnpm/action-setup 会直接报 "No pnpm version is specified" 退出（曾导致 CI 全红）。
+      # 锁在 10 而非上游 deploy 的 11：pnpm 11 新增 minimumReleaseAge 供应链策略，
+      # 会拒绝 lock 中近期发布的传递依赖（实测 @types/ws@8.18.2 / std-env@4.3.0 被拒），
+      # 而本 lock 由 pnpm 10.28.2 生成，10 可完整消费。升级需先解决该策略。
       - name: ⚙ Setup pnpm
         uses: pnpm/action-setup@v4.1.0
+        with:
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'pnpm'
-          cache-dependency-path: './mail-vue/pnpm-lock.yaml'
+          # setup-node 的 cwd 是仓库根（defaults.run.working-directory 不影响 uses），
+          # 故此处必须是根相对路径。
+          cache-dependency-path: 'mail-vue/pnpm-lock.yaml'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
