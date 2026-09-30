@@ -48,4 +48,6 @@ dev-docs/
 .env.*.local
 *.pem
 *.key
+# 测试覆盖率产物（F005）
+coverage/
 # ==== 红线段结束 ====
