@@ -59,28 +59,32 @@ describe('路由守卫 · 未登录跳转（F005 US2）', () => {
     })
 
     /**
-     * 复刻 router/index.js L101-116 的守卫决策（纯逻辑）：
-     * 未登录 + 非 login 路径 → 跳 login
+     * 直接引用 router/index.js 导出的真实决策函数（resolveGuardAction），
+     * 而非复刻逻辑——复刻会与实现脱节（评审建议项，2026-09-30 已修正）。
      */
-    function guardDecision(to, from, storage) {
-        const token = storage.getItem('token')
-        if (!token && !to.path.startsWith('/login')) {
-            return { redirectedTo: 'login' }
-        }
-        if (token && to.path.startsWith('/login')) {
-            return { redirectedTo: from.path }
-        }
-        return { redirectedTo: null }
+    async function guard(token, to, from) {
+        const { resolveGuardAction } = await import('@/router/index.js')
+        return resolveGuardAction(token, to, from)
     }
 
-    it('无 token 访问 /sent → 重定向 login', () => {
-        const decision = guardDecision({ path: '/sent' }, { path: '/' }, localStorage)
-        expect(decision.redirectedTo).toBe('login')
+    it('无 token 访问 /sent → 重定向 login', async () => {
+        const action = await guard(null, { path: '/sent' }, { path: '/' })
+        expect(action.type).toBe('redirect-login')
     })
 
-    it('有 token 访问 /login → 重定向来源页', () => {
-        localStorage.setItem('token', 'fake-token')
-        const decision = guardDecision({ path: '/login' }, { path: '/inbox' }, localStorage)
-        expect(decision.redirectedTo).toBe('/inbox')
+    it('有 token 访问 /login → 重定向来源页', async () => {
+        const action = await guard('fake-token', { path: '/login' }, { path: '/inbox' })
+        expect(action.type).toBe('redirect-back')
+        expect(action.to).toBe('/inbox')
+    })
+
+    it('无 token 访问 /login → 走加载背景分支（不重定向）', async () => {
+        const action = await guard(null, { path: '/login' }, { path: '/' })
+        expect(action.type).toBe('load-background')
+    })
+
+    it('有 token 访问普通页 → 正常放行', async () => {
+        const action = await guard('fake-token', { path: '/inbox' }, { path: '/' })
+        expect(action.type).toBe('proceed')
     })
 })

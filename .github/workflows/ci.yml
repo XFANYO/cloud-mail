@@ -34,22 +34,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: ⚙ Setup pnpm
+        uses: pnpm/action-setup@v4.1.0
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: './mail-vue/package-lock.json'
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: './mail-vue/pnpm-lock.yaml'
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Test
-        run: npm run test
+        run: pnpm run test
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       # typecheck job 随 F001 接入
+      # 已知上游依赖冲突：@vitejs/plugin-vue@5.2.4 声明 peer vite ^5||^6，而实际 vite 7.1.5。
+      # 建议后续升 @vitejs/plugin-vue 至 v6 根治（不属本特性范围）。

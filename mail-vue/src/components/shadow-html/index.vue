@@ -1,40 +1,42 @@
 <template>
-  <div class="content-box" ref="contentBox">
-    <div ref="container" class="content-html"></div>
-  </div>
+    <div class="content-box" ref="contentBox">
+        <div ref="container" class="content-html"></div>
+    </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { sanitizeEmail } from '@/utils/sanitizeEmail'
 
 const props = defineProps({
-  html: {
-    type: String,
-    required: true
-  }
+    html: {
+        type: String,
+        required: true,
+    },
 })
 
+const { t } = useI18n()
 const container = ref(null)
 const contentBox = ref(null)
 let shadowRoot = null
 
 function updateContent() {
-  if (!shadowRoot) return;
+    if (!shadowRoot) return
 
-  // 0. 消毒：剥离事件属性 / javascript: URI / 危险标签，阻断远程图片（F003 D-5/D-6）
-  const safeHtml = sanitizeEmail(props.html || '');
+    // 0. 消毒：剥离事件属性 / javascript: URI / 危险标签，阻断远程图片（F003 D-5/D-6）
+    const safeHtml = sanitizeEmail(props.html || '')
 
-  // 1. 提取 <body> 的 style 属性（如果存在）——基于消毒后的字符串
-  const bodyStyleRegex = /<body[^>]*style="([^"]*)"[^>]*>/i;
-  const bodyStyleMatch = safeHtml.match(bodyStyleRegex);
-  const bodyStyle = bodyStyleMatch ? bodyStyleMatch[1] : '';
+    // 1. 提取 <body> 的 style 属性（如果存在）——基于消毒后的字符串
+    const bodyStyleRegex = /<body[^>]*style="([^"]*)"[^>]*>/i
+    const bodyStyleMatch = safeHtml.match(bodyStyleRegex)
+    const bodyStyle = bodyStyleMatch ? bodyStyleMatch[1] : ''
 
-  // 2. 移除 <body> 标签（保留内容）
-  const cleanedHtml = safeHtml.replace(/<\/?body[^>]*>/gi, '');
+    // 2. 移除 <body> 标签（保留内容）
+    const cleanedHtml = safeHtml.replace(/<\/?body[^>]*>/gi, '')
 
-  // 3. 将 body 的 style 应用到 .shadow-content
-  shadowRoot.innerHTML = `
+    // 3. 将 body 的 style 应用到 .shadow-content
+    shadowRoot.innerHTML = `
     <style>
       :host {
         all: initial;
@@ -92,71 +94,89 @@ function updateContent() {
     <div class="shadow-content">
       ${cleanedHtml}
     </div>
-  `;
+  `
+
+    // 4. 给被阻断的远程图片补可发现性提示（title / aria-label），
+    //    否则用户只看到一个虚线占位框，不知道「可点击加载」。文案取 i18n 的 showImages。
+    const hint = t('showImages')
+    shadowRoot.querySelectorAll('img.cm-blocked-img').forEach((img) => {
+        img.setAttribute('title', hint)
+        img.setAttribute('aria-label', hint)
+        img.setAttribute('role', 'button')
+    })
 }
 
 /**
  * 点击被阻断的远程图片 → 用 data-orig-src 还原真实地址（F003 D-6）
  */
 function handleShadowClick(e) {
-  const img = e.target && e.target.closest ? e.target.closest('img.cm-blocked-img') : null
-  if (!img) return
-  const orig = img.getAttribute('data-orig-src')
-  if (orig) {
-    img.setAttribute('src', orig)
-    img.removeAttribute('data-orig-src')
-    img.classList.remove('cm-blocked-img')
-  }
+    const img = e.target && e.target.closest ? e.target.closest('img.cm-blocked-img') : null
+    if (!img) return
+    const orig = img.getAttribute('data-orig-src')
+    if (orig) {
+        img.setAttribute('src', orig)
+        img.removeAttribute('data-orig-src')
+        img.classList.remove('cm-blocked-img')
+        // 已加载：移除占位提示，恢复正常图片语义
+        img.removeAttribute('title')
+        img.removeAttribute('aria-label')
+        img.removeAttribute('role')
+    }
 }
 
 function autoScale() {
-  if (!shadowRoot || !contentBox.value) return
+    if (!shadowRoot || !contentBox.value) return
 
-  const parent = contentBox.value
-  const shadowContent = shadowRoot.querySelector('.shadow-content')
+    const parent = contentBox.value
+    const shadowContent = shadowRoot.querySelector('.shadow-content')
 
-  if (!shadowContent) return
+    if (!shadowContent) return
 
-  const parentWidth = parent.offsetWidth
-  const childWidth = shadowContent.scrollWidth
+    const parentWidth = parent.offsetWidth
+    const childWidth = shadowContent.scrollWidth
 
-  if (childWidth === 0) return
+    if (childWidth === 0) return
 
-  const scale = parentWidth / childWidth
+    const scale = parentWidth / childWidth
 
-  const hostElement = shadowRoot.host
-  hostElement.style.zoom = scale
+    const hostElement = shadowRoot.host
+    hostElement.style.zoom = scale
 }
 
 onMounted(() => {
-  shadowRoot = container.value.attachShadow({ mode: 'open' })
-  shadowRoot.addEventListener('click', handleShadowClick)
-  updateContent()
-  autoScale()
+    shadowRoot = container.value.attachShadow({ mode: 'open' })
+    shadowRoot.addEventListener('click', handleShadowClick)
+    updateContent()
+    autoScale()
 })
 
 onBeforeUnmount(() => {
-  if (shadowRoot) {
-    shadowRoot.removeEventListener('click', handleShadowClick)
-  }
+    if (shadowRoot) {
+        shadowRoot.removeEventListener('click', handleShadowClick)
+    }
 })
 
-watch(() => props.html, () => {
-  updateContent()
-  autoScale()
-})
+watch(
+    () => props.html,
+    () => {
+        updateContent()
+        autoScale()
+    }
+)
 </script>
 
 <style scoped>
 .content-box {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  font-family: Inter, "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family:
+        Inter, 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial,
+        sans-serif;
 }
 
 .content-html {
-  width: 100%;
-  height: 100%;
+    width: 100%;
+    height: 100%;
 }
 </style>

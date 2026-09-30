@@ -1,8 +1,8 @@
-import {createRouter, createWebHistory} from 'vue-router'
-import NProgress from 'nprogress';
-import {useUiStore} from "@/store/ui.js";
-import {useSettingStore} from "@/store/setting.js";
-import {cvtR2Url} from "@/utils/convert.js";
+import { createRouter, createWebHistory } from 'vue-router'
+import NProgress from 'nprogress'
+import { useUiStore } from '@/store/ui.js'
+import { useSettingStore } from '@/store/setting.js'
+import { cvtR2Url } from '@/utils/convert.js'
 
 const routes = [
     {
@@ -18,8 +18,8 @@ const routes = [
                 meta: {
                     title: 'inbox',
                     name: 'email',
-                    menu: true
-                }
+                    menu: true,
+                },
             },
             {
                 path: '/mail',
@@ -28,8 +28,8 @@ const routes = [
                 meta: {
                     title: 'message',
                     name: 'content',
-                    menu: false
-                }
+                    menu: false,
+                },
             },
             {
                 path: '/settings',
@@ -38,8 +38,8 @@ const routes = [
                 meta: {
                     title: 'settings',
                     name: 'setting',
-                    menu: true
-                }
+                    menu: true,
+                },
             },
             {
                 path: '/starred',
@@ -48,46 +48,66 @@ const routes = [
                 meta: {
                     title: 'starred',
                     name: 'star',
-                    menu: true
-                }
+                    menu: true,
+                },
             },
-        ]
-
+        ],
     },
     {
         path: '/login',
         name: 'login',
-        component: () => import('@/views/login/index.vue')
+        component: () => import('@/views/login/index.vue'),
     },
     {
         path: '/test',
         name: 'test',
-        component: () => import('@/views/test/index.vue')
+        component: () => import('@/views/test/index.vue'),
     },
     {
         path: '/:pathMatch(.*)*',
         name: '404',
-        component: () => import('@/views/404/index.vue')
-    }
+        component: () => import('@/views/404/index.vue'),
+    },
 ]
-
 
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
-    routes
+    routes,
 })
 
 NProgress.configure({
-    showSpinner: false,   // 不显示旋转图标
-    trickleSpeed: 50,    // 自动递增速度
-    minimum: 0.1          // 最小百分比
-});
+    showSpinner: false, // 不显示旋转图标
+    trickleSpeed: 50, // 自动递增速度
+    minimum: 0.1, // 最小百分比
+})
 
 let timer
 let first = true
 
-router.beforeEach((to, from, next) => {
+/**
+ * 路由守卫决策（纯函数，导出以便测试直接引用实现，避免测试复刻逻辑而脱节）
+ *
+ * @param {string|null} token - localStorage 中的登录 token
+ * @param {{path: string}} to - 目标路由
+ * @param {{path: string}} from - 来源路由
+ * @returns {{type: 'redirect-login'|'redirect-back'|'load-background'|'proceed'}}
+ */
+export function resolveGuardAction(token, to, from) {
+    const isLoginPath = to.path.startsWith('/login')
 
+    if (!token && !isLoginPath) {
+        return { type: 'redirect-login' }
+    }
+    if (!token && isLoginPath) {
+        return { type: 'load-background' }
+    }
+    if (token && isLoginPath) {
+        return { type: 'redirect-back', to: from.path }
+    }
+    return { type: 'proceed' }
+}
+
+router.beforeEach((to, from, next) => {
     if (timer) {
         clearTimeout(timer)
     }
@@ -100,67 +120,58 @@ router.beforeEach((to, from, next) => {
 
     const token = localStorage.getItem('token')
 
-    if (!token && !to.path.startsWith('/login')) {
-        return next({name: 'login'})
+    switch (resolveGuardAction(token, to, from).type) {
+        case 'redirect-login':
+            return next({ name: 'login' })
+        case 'load-background':
+            loadBackground(next)
+            return
+        case 'redirect-back':
+            return next(from.path)
+        default:
+            next()
     }
-
-    if (!token && to.path.startsWith('/login')) {
-        loadBackground(next)
-        return
-    }
-
-    if (token && to.path.startsWith('/login')) {
-        return next(from.path)
-    }
-
-    next()
-
 })
 
 function loadBackground(next) {
-
-    const settingStore = useSettingStore();
+    const settingStore = useSettingStore()
 
     if (settingStore.settings.background) {
+        const src = cvtR2Url(settingStore.settings.background)
 
-        const src = cvtR2Url(settingStore.settings.background);
-
-        const img = new Image();
-        img.src = src;
+        const img = new Image()
+        img.src = src
 
         img.onload = () => {
             next()
-        };
+        }
 
         img.onerror = () => {
-            console.warn("背景图片加载失败:", img.src);
+            console.warn('背景图片加载失败:', img.src)
             next()
-        };
+        }
 
         setTimeout(() => {
-            console.warn("背景加载超时，已放行");
+            console.warn('背景加载超时，已放行')
             next()
         }, 3000)
-
     } else {
         next()
     }
-
 }
 
 router.afterEach((to) => {
-
     clearTimeout(timer)
     if (first) {
         removeLoading()
     } else {
-        NProgress.done();
+        NProgress.done()
     }
 
     const uiStore = useUiStore()
     if (to.meta.menu) {
         if (['content', 'email', 'send'].includes(to.meta.name)) {
-            uiStore.accountShow = window.innerWidth > 767;
+            uiStore.accountShow = window.innerWidth > 767
         } else {
             uiStore.accountShow = false
         }
@@ -174,9 +185,9 @@ router.afterEach((to) => {
 })
 
 function removeLoading() {
-    const doc = document.getElementById('loading-first');
+    const doc = document.getElementById('loading-first')
     if (!doc) {
-        return;
+        return
     }
 
     doc.remove()

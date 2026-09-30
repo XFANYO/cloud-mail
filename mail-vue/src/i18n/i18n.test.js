@@ -34,3 +34,51 @@ describe('i18n · zh/en key 集合一致性', () => {
         expect(emptyEn).toEqual([])
     })
 })
+
+/**
+ * 死键检测（评审建议项，2026-09-30）
+ *
+ * i18n key 加了却没人用 = 死键。本次评审已发现一例（showImages 曾被定义但无引用）。
+ * 这里用 import.meta.glob 以 raw 方式读入全部源码，检查每个 key 至少被引用一次。
+ *
+ * 豁免清单：正当的「定义即用」场景（如测试断言、动态拼接的 key）。
+ */
+describe('i18n · 死键检测', () => {
+    /** 动态拼接 / 测试专用的 key，不参与死键检测 */
+    const ALLOWED_UNUSED = [
+        // 由测试直接断言用
+        'wrote',
+        // 以下为上游既有死键（冻结基线，只许减少不许增加）。
+        // 修正应走独立 issue，不在本特性顺手删（避免与上游产生无谓 diff，见 F006 上游同步）。
+        'delAccount',
+        'dayUnit',
+        'subjectInputDesc',
+        'clearAllDelConfirm',
+        'delInputPattern',
+        'inputErrorMessage',
+        'banRestore',
+        'mustNotContainDesc',
+        'notOwner',
+    ]
+
+    it('每个 i18n key 至少被源码引用一次（无死键）', () => {
+        // raw 方式读入全部源码（源文件 + 组件），排除 i18n 资源文件自身与测试文件
+        const sources = import.meta.glob(['../**/*.{js,vue}', '!../i18n/*.js', '!../**/*.test.js'], {
+            query: '?raw',
+            import: 'default',
+        })
+
+        // 拼接所有源码为一个大字符串，逐个 key 检查是否出现
+        // 注意：import.meta.glob 返回的是惰性函数，需要同步获取——改用 eager 不可行（vitest 中仍需 await）
+        // 故此处改为在运行时异步收集。
+        return Promise.all(Object.values(sources).map((load) => load())).then((contents) => {
+            const corpus = contents.join('\n')
+            const unused = Object.keys(zh).filter((k) => {
+                if (ALLOWED_UNUSED.includes(k)) return false
+                // key 可能以 t('key') / $t('key') / :label="t('key')" 等形式出现
+                return !corpus.includes(`'${k}'`) && !corpus.includes(`"${k}"`)
+            })
+            expect(unused).toEqual([])
+        })
+    })
+})
