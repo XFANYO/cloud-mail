@@ -41,6 +41,7 @@ export default defineConfig(({mode}) => {
             }),
             AutoImport({
                 resolvers: [ElementPlusResolver()],
+                eslintrc: { enabled: true },
             }),
             Components({
                 resolvers: [ElementPlusResolver()],
